@@ -6,18 +6,17 @@ button bindable to one specific task via long-press, to start it on demand).
 
 - Plugin UUID: `dk.ellegaardid.awork-timer` (fixed – never change; it is permanent once published to Marketplace)
 - Scaffolded with `streamdeck create` (Stream Deck CLI 1.10.1, SDK `@elgato/streamdeck` ^3.0.0, `SDKVersion: 3`)
-- Dev machine: Windows 11, Node.js 24.21.0 (via nvm-windows), Stream Deck app 7.6
-- Devices seen in logs: Stream Deck XL (8x4), two Stream Deck (5x3), three virtual decks
-- Not yet published anywhere; git repo at https://github.com/ellegaarddk/awork-timer (private)
+- Git repo at https://github.com/ellegaarddk/awork-timer; not yet published to the Marketplace.
+- MIT licensed.
 
-## Owner requirements (non-negotiable)
+## Conventions
 
 1. **Extensible.** Structure the code so new features and new key actions can be added without touching existing modules. Keep API access, state logic, rendering and actions separate.
-2. **Settings over hardcoding.** Anything a user might want to change comes from settings (property inspector / global settings). Only sensible defaults live in code, collected in one defaults module.
-3. **English only** for code, comments, identifiers, log messages and user-facing strings. Localization comes later, so keep all user-facing strings in one place, ready for Stream Deck's i18n mechanism (read the SDK's Localization guide before adding strings).
+2. **Settings over hardcoding.** Anything a user might want to change comes from settings (property inspector / global settings), never hardcoded. Defaults live only in `src/config/defaults.ts`.
+3. **English only** for code, comments, identifiers, log messages and user-facing strings. All user-facing strings live in `src/i18n/strings.ts`, ready for Stream Deck's i18n mechanism (read the SDK's Localization guide before adding translations).
 4. **Correctness over speed.** Respect API rate limits, cache where sensible, handle errors explicitly.
-5. **Cross-platform.** The manifest targets Windows and macOS – do not use Windows-only APIs or paths.
-6. **One step at a time.** Ask the owner when something is unclear instead of assuming. Do not claim something works without evidence (build output, logs, or observed key behavior).
+5. **Cross-platform.** The manifest targets Windows and macOS – do not use platform-specific APIs or paths.
+6. **Never log settings or tokens.** Log individual values (ids, states, error messages) — never a whole settings/OAuth object.
 
 ## Feature scope
 
@@ -71,9 +70,9 @@ This makes control calls unusable for this plugin's purpose:
 
 **Fix: the plugin authenticates as the owner via OAuth (PKCE), so `/me/...` genuinely means
 them.** No `userId` setting exists or is needed.
-- OAuth client "Awork Timer (Stream Deck)" registered by the owner in awork under
-  **Settings → Integrations → API Clients** (self-service; the earlier assumption that this
-  needed a separate partner/approval process was wrong). Public client, no secret.
+- OAuth client registered by the owner in awork under **Settings → Integrations → API
+  Clients** (self-service; the earlier assumption that this needed a separate
+  partner/approval process was wrong). Public client, no secret.
   - The **Client ID is a global setting** (`oauthClientId` in `GlobalSettings`), entered in
     Active Timer's PI, not hardcoded — it isn't secret, but each installation may register its
     own client application, so it doesn't belong in source. `AworkClient.fromGlobalSettings()`
@@ -139,6 +138,7 @@ them.** No `userId` setting exists or is needed.
 - **A key's native "Title" (set by the user directly in the Stream Deck app) always wins and can't be cleared by the plugin once set** — `KeyAction.setTitle()`'s doc note: "the title can only be set by the plugin when the user has not specified a custom title." The plugin only learns the *current* title via `onTitleParametersDidChange`, never on `willAppear` — a title set before the plugin last started won't be known until the user re-saves that field once. See `native-title-tracker.ts`; when a native title is present, both actions render background-only (`buildBackgroundSvg`) rather than draw overlapping text.
 - **`streamdeck validate` must be run from inside the `.sdPlugin` folder**, not the project root, or it errors about the manifest/name format.
 - **Any unhandled rejection in a key-press handler can silently crash the whole plugin process** — always `.catch()` (or try/catch) the async work kicked off from `onKeyDown`/`onKeyUp`, not just `#renderKey`.
+- **`sdpi-components.js` is vendored locally, not loaded from the CDN.** Both PIs originally pointed at `https://sdpi-components.dev/releases/v4/sdpi-components.js` at runtime — a supply-chain exposure, since the PI has access to the plugin's full global-settings sync channel (including OAuth tokens) via `sdpi-components`' own `global` field bindings, and the script had no integrity check. Fixed: the file lives at `dk.ellegaardid.awork-timer.sdPlugin/ui/vendor/sdpi-components.js` (currently v4.0.1, `sha256:f6c0dfd2ed68e18084b9952842b86e3850cf837d674704700c2a0718e0a24f6b`), referenced as `<script src="vendor/sdpi-components.js">`. To upgrade: re-download from that URL, verify it looks like the real library (license header, not an error page), and update the hash here.
 
 ## Architecture (current)
 
@@ -168,7 +168,7 @@ src/
 
 - The original scaffold action `increment-counter` has been fully removed (replaced by Active Timer, then Task Timer added alongside it).
 - `streamDeck.logger.setLevel("info")` in `plugin.ts` — never `"trace"`, to avoid logging OAuth tokens.
-- `.gitignore` excludes `node_modules/`, `*.sdPlugin/bin`, `*.sdPlugin/logs`, and `/logs` (a stray top-level logs dir that `streamdeck` CLI commands create if run from the wrong cwd — see the validate quirk above).
+- `.gitignore` excludes `node_modules/`, `*.sdPlugin/bin`, `*.sdPlugin/logs`, `/logs` (a stray top-level logs dir that `streamdeck` CLI commands create if run from the wrong cwd — see the validate quirk above), and `CLAUDE.local.md`.
 - Logs: `dk.ellegaardid.awork-timer.sdPlugin/logs/` (rotates; check the newest-modified file, not always `.0.log`).
 - Action icons are still placeholder art (copied from the scaffold's counter icons) — real branding is a separate follow-up task.
 - eID logo watermark asset: `dk.ellegaardid.awork-timer.sdPlugin/imgs/branding/eid-logo.svg` — a copy of the brand favicon with its hardcoded fill removed so `key-renderer.ts` can tint it white.

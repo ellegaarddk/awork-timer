@@ -4,7 +4,8 @@
 <head lang="en">
     <title>Active Timer Settings</title>
     <meta charset="utf-8" />
-    <script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+    <!-- Vendored locally (not loaded from the CDN at runtime) — see CLAUDE.md "Stream Deck quirks" for why. -->
+    <script src="vendor/sdpi-components.js"></script>
 </head>
 
 <body>
@@ -14,7 +15,7 @@
     -->
 
     <sdpi-item label="Awork Client ID">
-        <sdpi-textfield setting="oauthClientId" global placeholder="e.g. stream-deck-4628"></sdpi-textfield>
+        <sdpi-textfield setting="oauthClientId" global placeholder="Paste your awork client ID"></sdpi-textfield>
     </sdpi-item>
     <sdpi-item>
         <small>Create an API client in awork under Settings &rarr; Integrations &rarr; API Clients, with redirect URI http://127.0.0.1:52305/callback.</small>

@@ -5,3 +5,6 @@ node_modules/
 *.sdPlugin/bin
 *.sdPlugin/logs
 /logs
+
+# Personal/machine-specific notes (see https://code.claude.com/docs/en/memory.md)
+CLAUDE.local.md
