@@ -9,9 +9,15 @@ export type TimerSnapshot = {
 	error?: string;
 };
 
-/** Global (plugin-wide) settings; never hardcode these values, never log the API key. */
+export type AworkOAuthTokens = {
+	accessToken: string;
+	refreshToken: string;
+	/** Epoch ms; computed locally from the token response's `expires_in` at fetch time. */
+	expiresAt: number;
+};
+
+/** Global (plugin-wide) settings; never hardcode these values, never log the tokens. */
 export type GlobalSettings = {
-	apiKey?: string;
-	userId?: string;
+	oauth?: AworkOAuthTokens;
 	pollIntervalSeconds?: number;
 };

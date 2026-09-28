@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AworkTimeEntry } from "../awork/types.ts";
-import { computeElapsedSeconds, decidePauseResumeAction, decideStopAction, deriveState, parseAworkDateTime } from "./state.ts";
+import { computeElapsedSeconds, decidePauseResumeAction, decideStopAction, deriveState, isBoundTaskActive, parseAworkDateTime } from "./state.ts";
 
 function entry(overrides: Partial<AworkTimeEntry> = {}): AworkTimeEntry {
 	return {
@@ -82,4 +82,15 @@ test("decideStopAction: stops when running or paused, otherwise nothing", () => 
 	assert.equal(decideStopAction("stopped"), null);
 	assert.equal(decideStopAction("idle"), null);
 	assert.equal(decideStopAction("error"), null);
+});
+
+test("isBoundTaskActive: true only when the bound task is running or paused", () => {
+	const e = entry({ taskId: "task-1" });
+	assert.equal(isBoundTaskActive(e, "task-1", "running"), true);
+	assert.equal(isBoundTaskActive(e, "task-1", "paused"), true);
+	assert.equal(isBoundTaskActive(e, "task-1", "stopped"), false);
+	assert.equal(isBoundTaskActive(e, "task-1", "idle"), false);
+	assert.equal(isBoundTaskActive(entry({ taskId: "task-2" }), "task-1", "running"), false);
+	assert.equal(isBoundTaskActive(e, undefined, "running"), false);
+	assert.equal(isBoundTaskActive(null, "task-1", "running"), false);
 });

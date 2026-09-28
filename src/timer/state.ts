@@ -86,3 +86,14 @@ export function decidePauseResumeAction(state: TimerState): "pause" | "resume" |
 export function decideStopAction(state: TimerState): "stop" | null {
 	return state === "running" || state === "paused" ? "stop" : null;
 }
+
+/**
+ * Whether a Task Timer key's bound task is the one actually active right now — i.e. the key
+ * should render its "active" color rather than "inactive"/unbound.
+ */
+export function isBoundTaskActive(entry: AworkTimeEntry | null, boundTaskId: string | undefined, state: TimerState): boolean {
+	if (!boundTaskId || (state !== "running" && state !== "paused")) {
+		return false;
+	}
+	return entry?.taskId === boundTaskId;
+}

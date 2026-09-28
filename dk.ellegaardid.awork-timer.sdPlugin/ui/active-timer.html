@@ -13,15 +13,11 @@
         "global" fields below persist to the plugin's global settings and are shared by every key.
     -->
 
-    <sdpi-item label="Awork API Key">
-        <sdpi-password setting="apiKey" global placeholder="Settings &rarr; Integrations &rarr; Manage API Keys in awork"></sdpi-password>
-    </sdpi-item>
-
-    <sdpi-item label="Awork User ID">
-        <sdpi-textfield setting="userId" global placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6"></sdpi-textfield>
+    <sdpi-item label="Awork Account">
+        <sdpi-button id="connect-button" onclick="connectToAwork()">Connect to Awork</sdpi-button>
     </sdpi-item>
     <sdpi-item>
-        <small>Find this by opening your own profile in awork &mdash; the ID is the UUID in the page's URL (&hellip;/users/&lt;id&gt;). An API key authenticates as a separate API user, so this cannot be detected automatically &mdash; every user of this plugin enters their own.</small>
+        <small id="connect-status">Not connected yet.</small>
     </sdpi-item>
 
     <sdpi-item label="Poll Interval (s)">
@@ -74,6 +70,34 @@
     <sdpi-item label="Long Press Threshold (ms)">
         <sdpi-range setting="longPressThresholdMs" min="200" max="2000" step="50" default="600" showlabels></sdpi-range>
     </sdpi-item>
+
+    <script>
+        function connectToAwork() {
+            document.getElementById("connect-status").textContent = "Opening awork in your browser…";
+            SDPIComponents.streamDeckClient.send("sendToPlugin", { event: "connectAwork" });
+        }
+
+        // SDPIComponents.streamDeckClient.sendToPropertyInspector may not be initialized yet at
+        // script-load time (it depends on the PI's websocket handshake completing) even though
+        // .send() already works by the time a user clicks a button seconds later — poll briefly
+        // rather than assume a fixed timing.
+        (function subscribeWhenReady() {
+            const client = window.SDPIComponents && window.SDPIComponents.streamDeckClient;
+            if (client && client.sendToPropertyInspector) {
+                client.sendToPropertyInspector.subscribe((ev) => {
+                    const payload = ev.payload || {};
+                    if (payload.event !== "connectAwork") {
+                        return;
+                    }
+                    document.getElementById("connect-status").textContent = payload.ok
+                        ? `Connected as ${payload.name}.`
+                        : `Connection failed: ${payload.error}`;
+                });
+            } else {
+                setTimeout(subscribeWhenReady, 50);
+            }
+        })();
+    </script>
 
 </body>
 

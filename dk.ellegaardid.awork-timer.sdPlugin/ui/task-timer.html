@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+
+<head lang="en">
+    <title>Task Timer Settings</title>
+    <meta charset="utf-8" />
+    <script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+</head>
+
+<body>
+    <!--
+        Learn more about property inspector components at https://sdpi-components.dev/docs/components
+        Long-press this key on the Stream Deck (while a timer is active elsewhere) to bind it to
+        that task. There is no manual task picker by design — binding always mirrors what's
+        actually running.
+    -->
+
+    <sdpi-item label="Bound Task">
+        <sdpi-textfield setting="taskName" disabled placeholder="Not bound yet — long-press the key while a timer is active"></sdpi-textfield>
+    </sdpi-item>
+
+    <sdpi-item label="Bound Project">
+        <sdpi-textfield setting="projectName" disabled placeholder="—"></sdpi-textfield>
+    </sdpi-item>
+
+    <sdpi-item label="Custom Title">
+        <sdpi-textfield setting="customTitle" placeholder="Overrides the task name shown on the key"></sdpi-textfield>
+    </sdpi-item>
+
+    <sdpi-item label="Active Color">
+        <sdpi-color setting="colorActive" default="#14532d"></sdpi-color>
+    </sdpi-item>
+
+    <sdpi-item label="Inactive Color">
+        <sdpi-color setting="colorInactive" default="#0f172a"></sdpi-color>
+    </sdpi-item>
+
+    <sdpi-item label="Long Press Threshold (ms)">
+        <sdpi-range setting="longPressThresholdMs" min="200" max="2000" step="50" default="600" showlabels></sdpi-range>
+    </sdpi-item>
+
+</body>
+
+</html>

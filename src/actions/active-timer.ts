@@ -1,5 +1,5 @@
 import streamDeck, { action, SingletonAction } from "@elgato/streamdeck";
-import type { KeyAction, KeyDownEvent, KeyUpEvent, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
+import type { KeyAction, KeyDownEvent, KeyUpEvent, TitleParametersDidChangeEvent, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
 import { AworkClient } from "../awork/client.js";
 import type { AworkTimeEntry } from "../awork/types.js";
 import {
@@ -12,9 +12,11 @@ import {
 	type TimeFormat
 } from "../config/defaults.js";
 import { STRINGS } from "../i18n/strings.js";
-import { buildKeySvg, formatElapsed } from "../render/key-renderer.js";
+import { buildBackgroundSvg, buildKeySvg, formatElapsed } from "../render/key-renderer.js";
 import { decidePauseResumeAction, decideStopAction } from "../timer/state.js";
 import { timerPoller } from "../timer/poller.js";
+import { NativeTitleTracker } from "./native-title-tracker.js";
+import { PressTracker } from "./press-tracker.js";
 import type { TimerSnapshot } from "../timer/types.js";
 
 export type ActiveTimerSettings = {
@@ -29,20 +31,21 @@ export type ActiveTimerSettings = {
 	longPressThresholdMs?: number;
 };
 
-type PressState = {
-	timer: ReturnType<typeof setTimeout>;
-	longPressFired: boolean;
-};
-
 @action({ UUID: "dk.ellegaardid.awork-timer.active-timer" })
 export class ActiveTimer extends SingletonAction<ActiveTimerSettings> {
 	#unsubscribe: (() => void) | undefined;
 	#lastSnapshot: TimerSnapshot = { state: "idle", elapsedSeconds: 0, entry: null };
-	#pressState = new Map<string, PressState>();
+	#pressTracker = new PressTracker();
+	#nativeTitles = new NativeTitleTracker();
 
 	override onWillAppear(ev: WillAppearEvent<ActiveTimerSettings>): void {
 		streamDeck.logger.info(`ActiveTimer: onWillAppear for action ${ev.action.id}`);
 		this.#unsubscribe ??= timerPoller.subscribe((snapshot) => this.#renderAll(snapshot));
+	}
+
+	override onTitleParametersDidChange(ev: TitleParametersDidChangeEvent<ActiveTimerSettings>): void {
+		this.#nativeTitles.update(ev.action.id, ev.payload.title);
+		this.#renderAll(this.#lastSnapshot);
 	}
 
 	override onWillDisappear(_ev: WillDisappearEvent<ActiveTimerSettings>): void {
@@ -56,32 +59,15 @@ export class ActiveTimer extends SingletonAction<ActiveTimerSettings> {
 		const { settings } = ev.payload;
 		const thresholdMs = settings.longPressThresholdMs ?? DEFAULT_LONG_PRESS_THRESHOLD_MS;
 
-		const existing = this.#pressState.get(ev.action.id);
-		if (existing) {
-			clearTimeout(existing.timer);
-		}
-
-		const state: PressState = {
-			longPressFired: false,
-			timer: setTimeout(() => {
-				state.longPressFired = true;
-				this.#handlePress(ev.action, settings.longPressAction ?? DEFAULT_LONG_PRESS_ACTION);
-			}, thresholdMs)
-		};
-		this.#pressState.set(ev.action.id, state);
+		this.#pressTracker.onKeyDown(ev.action.id, thresholdMs, () => {
+			this.#handlePress(ev.action, settings.longPressAction ?? DEFAULT_LONG_PRESS_ACTION);
+		});
 	}
 
 	override onKeyUp(ev: KeyUpEvent<ActiveTimerSettings>): void {
-		const state = this.#pressState.get(ev.action.id);
-		if (!state) {
-			return;
-		}
-		this.#pressState.delete(ev.action.id);
-		clearTimeout(state.timer);
-
-		if (!state.longPressFired) {
+		this.#pressTracker.onKeyUp(ev.action.id, () => {
 			this.#handlePress(ev.action, ev.payload.settings.shortPressAction ?? DEFAULT_SHORT_PRESS_ACTION);
-		}
+		});
 	}
 
 	#handlePress(action: KeyAction<ActiveTimerSettings>, configured: PressAction): void {
@@ -144,14 +130,6 @@ export class ActiveTimer extends SingletonAction<ActiveTimerSettings> {
 
 	async #renderKey(instance: KeyAction<ActiveTimerSettings>, snapshot: TimerSnapshot): Promise<void> {
 		const settings = await instance.getSettings();
-		const format = settings.timeFormat ?? DEFAULT_TIME_FORMAT;
-
-		const text =
-			snapshot.state === "idle"
-				? STRINGS.key.idle
-				: snapshot.state === "error"
-					? STRINGS.key.error
-					: formatElapsed(snapshot.elapsedSeconds, format);
 
 		const color =
 			{
@@ -162,8 +140,23 @@ export class ActiveTimer extends SingletonAction<ActiveTimerSettings> {
 				error: settings.colorError
 			}[snapshot.state] ?? DEFAULT_COLORS[snapshot.state];
 
+		// A native Stream Deck title (set by the user in the Stream Deck app itself, not this
+		// plugin) always wins — we can't clear it, so don't draw our own text underneath it.
+		if (this.#nativeTitles.hasTitle(instance.id)) {
+			await instance.setImage(buildBackgroundSvg(color));
+			return;
+		}
+
+		const format = settings.timeFormat ?? DEFAULT_TIME_FORMAT;
+		const text =
+			snapshot.state === "idle"
+				? STRINGS.key.idle
+				: snapshot.state === "error"
+					? STRINGS.key.error
+					: formatElapsed(snapshot.elapsedSeconds, format);
 		const label = snapshot.entry?.task?.name ?? snapshot.entry?.project?.name ?? undefined;
 
+		await instance.setTitle("");
 		await instance.setImage(buildKeySvg(text, color, label));
 	}
 }

@@ -18,6 +18,22 @@
 					"TitleAlignment": "middle"
 				}
 			]
+		},
+		{
+			"Name": "Task Timer",
+			"UUID": "dk.ellegaardid.awork-timer.task-timer",
+			"Icon": "imgs/actions/task-timer/icon",
+			"Tooltip": "Starts a specific Awork task's timer. Long-press to bind this key to whatever task is currently active.",
+			"PropertyInspectorPath": "ui/task-timer.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/task-timer/key",
+					"TitleAlignment": "middle"
+				}
+			]
 		}
 	],
 	"Category": "Awork Timer",

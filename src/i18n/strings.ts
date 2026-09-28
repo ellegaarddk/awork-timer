@@ -11,12 +11,16 @@ export const STRINGS = {
 		idle: "No timer",
 		error: "Error"
 	},
+	taskTimer: {
+		unbound: "Long Press | for | Binding",
+		notBoundHelp: "Not bound yet — long-press the key while a timer is active elsewhere.",
+		boundHelp: "Bound to: {task} ({project})"
+	},
 	propertyInspector: {
-		apiKeyLabel: "Awork API Key",
-		apiKeyPlaceholder: "Settings → Integrations → Manage API Keys in awork",
-		userIdLabel: "Awork User ID",
-		userIdHelp:
-			"Open your own profile in awork — the ID is the UUID in the page URL (…/users/{id}).",
+		connectLabel: "Awork Account",
+		connectButton: "Connect to Awork",
+		connectNotConnected: "Not connected yet.",
+		connectOpening: "Opening awork in your browser…",
 		pollIntervalLabel: "Poll Interval (seconds)",
 		colorRunningLabel: "Running Color",
 		colorPausedLabel: "Paused Color",

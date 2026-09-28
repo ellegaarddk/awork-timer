@@ -1,11 +1,14 @@
 # Awork Timer – Stream Deck plugin
 
-Stream Deck plugin by ellegaard ID that shows the active Awork timer on a key, colors the key by timer state, and lets the user pause/resume/stop the timer from the key.
+Stream Deck plugin by ellegaard ID with two key actions: **Active Timer** (shows the owner's
+active Awork timer, colored by state, with pause/resume/stop/restart) and **Task Timer** (a
+button bindable to one specific task via long-press, to start it on demand).
 
 - Plugin UUID: `dk.ellegaardid.awork-timer` (fixed – never change; it is permanent once published to Marketplace)
 - Scaffolded with `streamdeck create` (Stream Deck CLI 1.10.1, SDK `@elgato/streamdeck` ^3.0.0, `SDKVersion: 3`)
 - Dev machine: Windows 11, Node.js 24.21.0 (via nvm-windows), Stream Deck app 7.6
 - Devices seen in logs: Stream Deck XL (8x4), two Stream Deck (5x3), three virtual decks
+- Not yet published anywhere; git repo at https://github.com/ellegaarddk/awork-timer (private)
 
 ## Owner requirements (non-negotiable)
 
@@ -18,103 +21,160 @@ Stream Deck plugin by ellegaard ID that shows the active Awork timer on a key, c
 
 ## Feature scope
 
-### Phase 1 – primary
-- Key shows elapsed time of the currently active Awork timer.
-- Key background color reflects state: running / paused / stopped (colors configurable).
+### Phase 1 – done
+- Active Timer key shows elapsed time of the currently active Awork timer.
+- Key background color reflects state: running / paused / stopped / idle / error (all configurable, per action).
+- Task/project name shown as a wrapping label; a faint eID logo watermark sits behind the text.
 
-### Phase 2 – secondary
-- Short press: pause or resume (configurable).
-- Long press: stop (configurable; threshold in ms configurable).
+### Phase 2 – done
+- Short press: pause / resume — resolves to **restart** (same task/project/type of work) when the timer is currently `stopped`, since the key is showing that timer's info.
+- Long press: stop. Both press actions configurable (`pause-resume` / `stop` / `none`), with a configurable threshold.
 
-### Configurable settings (planned)
+### Phase 3 – done: Task Timer action
+- Separate key action (`dk.ellegaardid.awork-timer.task-timer`). No task picker/dropdown by design.
+- **Long press**: while a timer is `running`/`paused` elsewhere, binds this key to that exact task (captures `taskId`, `projectId`, `typeOfWorkId`, `timezone`, and display names into the key's own settings). Alerts if nothing is active to capture. Resets any Custom Title on every rebind.
+- **Short press**: starts tracking the bound task (`POST /me/timetracking/start`). Alerts if unbound.
+- Key shows the bound project as a label, and Custom Title (if set) or the task name as the main text; colors "active" when the bound task is the one actually running/paused, else "inactive".
+
+### Configurable settings (current)
 | Setting | Scope | Notes |
 |---|---|---|
-| Awork API key | global | Secret. Never log it, never commit it. |
-| Awork user ID | global | Owner's user ID; required because the API key acts as a separate API user |
-| Poll interval (s) | global | Default suggestion: 15–30 s |
-| Color: running / paused / stopped | per action | Hex |
-| Long-press threshold (ms) | per action | |
-| Short-press action / long-press action | per action | pause-resume, stop, none |
-| Time display format | per action | e.g. `h:mm`, `h:mm:ss` |
+| Awork connection | global | OAuth 2.0 (PKCE); "Connect to Awork" button in either action's PI. No API key/user ID setting exists anymore. |
+| Poll interval (s) | global | Default 20 s |
+| Color: running / paused / stopped / idle / error | per Active Timer key | Hex |
+| Time display format | per Active Timer key | `h:mm` or `h:mm:ss` |
+| Short-press action / long-press action | per Active Timer key | `pause-resume`, `stop`, `none` |
+| Long-press threshold (ms) | per key (both actions) | Default 600 |
+| Custom Title | per Task Timer key | Overrides the bound task's name; reset on every rebind |
+| Color: active / inactive | per Task Timer key | Hex |
 
 ## Awork API – verified facts
 
-Verified on 2026-09-28 against the owner's live workspace via Awork's OpenAPI spec and real calls, and against the owner's earlier working PowerShell script (`C:\Users\MortenEllegaardLarse\Nextcloud\Documents\Streamdeck\Scripts\awork-timer.ps1`, log shows successful calls July–September 2026).
+Verified 2026-09-28, first against an old PowerShell script + the OpenAPI spec (via the Awork
+MCP connector's `find_capability`), then corrected significantly once OAuth was implemented
+and live-tested. **The auth-identity section below reverses what earlier verification assumed
+— trust this version.**
 
-### Connection (from the working script)
-- Base URL: `https://api.awork.com/api/v1`
-- Auth: `Authorization: Bearer <API key>` (confirmed working in the script's log)
-- Alternative auth in the script: client_credentials via `POST /accounts/token` (form-encoded). Not needed unless API keys stop working.
+### Auth: OAuth 2.0 with PKCE (not an API key)
+A plain workspace **API key authenticates as a separate, dedicated "API Client" identity**
+(shows up in awork as a user named "stream-deck plugin (API Client)"), never as the owner.
+This makes control calls unusable for this plugin's purpose:
+- `POST /users/{userId}/timetracking/pause` returned `400 invalid-operation: "You can only
+  pause your own time trackings"` when called with the owner's real `userId` — the API key's
+  own identity doesn't match, and there is no elevated/admin override available to a plugin.
+- `resume` is **documented by Awork as `/me`-only** — `/users/{userId}/timetracking/resume`
+  doesn't exist as a working route at all, regardless of permissions.
+- Reads (`GET /users/{userId}/timeentries/last`) happened to keep working under the API key
+  regardless of whether `{userId}` was even valid (a nonexistent id returned `204`, not an
+  error) — which is why display kept working long after control silently couldn't.
 
-### IMPORTANT: API key identity
-An Awork API key authenticates as a **separate API user, not as the owner**. Therefore:
-- Do **not** use `/me/...` routes from the plugin – they would return the API user's data.
-- Use the owner's user ID explicitly:
-  - Read state: `GET /users/{userId}/timeentries/last`
-  - Control: `POST /users/{userId}/timetracking/pause | resume | stop` (all exist in the spec)
-- `userId` must be a **setting** (global), not hardcoded. The owner's ID is recorded in the old script; ask the owner before putting it anywhere in the repo.
-- The `/me/...` observations below were made through an OAuth connection that acts as the owner; the response shape is the same for `/users/{userId}/timeentries/last` (same schema in the spec).
+**Fix: the plugin authenticates as the owner via OAuth (PKCE), so `/me/...` genuinely means
+them.** No `userId` setting exists or is needed.
+- OAuth client "Awork Timer (Stream Deck)" registered by the owner in awork under
+  **Settings → Integrations → API Clients** (self-service; the earlier assumption that this
+  needed a separate partner/approval process was wrong). Public client, no secret.
+  - Client ID `stream-deck-4628` — public, not secret, safe to commit (`config/defaults.ts`).
+  - Redirect URI `http://127.0.0.1:52305/callback`, fixed port, must match exactly what's
+    registered in awork.
+- Authorize: `GET https://api.awork.com/api/v1/accounts/authorize` — `client_id`,
+  `redirect_uri`, `scope=full_access offline_access`, `response_type=code`,
+  `grant_type=authorization_code` (yes, on the *authorize* call too, per Awork's own docs),
+  `state`, `code_challenge` (`base64url(sha256(code_verifier))`), `code_challenge_method=S256`.
+- Token: `POST https://api.awork.com/api/v1/accounts/token` (form-encoded). Code exchange:
+  `code`, `redirect_uri`, `grant_type=authorization_code`, `code_verifier`, `client_id`.
+  Refresh: `client_id`, `grant_type=refresh_token`, `refresh_token`.
+- Token response: `{ access_token, token_type: "Bearer", expires_in: 86400, refresh_token }`.
+  Refresh tokens **rotate on every use** (save the new one each time) and expire after 30
+  days unused.
+- Login flow: opens the system browser (`open` package) to the authorize URL, catches the
+  redirect on a one-shot local `node:http` server, exchanges the code, saves tokens to global
+  settings. Triggered by a "Connect to Awork" button in the PI via
+  `streamDeck.ui.onSendToPlugin`/`sendToPropertyInspector` (see `src/plugin.ts`,
+  `src/awork/oauth.ts`).
 
-### Control calls
-- The old script sent `POST .../timetracking/{stop|pause|resume}` with an empty JSON body `{}`. Stop worked; pause/resume were reported as not working and never debugged. Check the spec's request body for pause/resume before implementing, and verify against the live API.
-- Earlier reference calls: `GET /me/timeentries/last`, `POST /me/timetracking/*` (owner context only).
-- There is **no explicit state field**. State is derived:
+### Time entry shape / state derivation
+- There is **no explicit state field**. State is derived (`timer/state.ts`, verified live):
 
-| State | Rule | Status |
-|---|---|---|
-| Running | `endDateUtc == null` AND no break without `endDate` | Verified |
-| Paused | `endDateUtc == null` AND last entry in `breaks` has no `endDate` | Verified |
-| Stopped | `endDateUtc != null` | Not yet verified – test when the owner stops a timer |
+| State | Rule |
+|---|---|
+| Running | `endDateUtc == null` AND no break without `endDate` |
+| Paused | `endDateUtc == null` AND last entry in `breaks` has no `endDate` |
+| Stopped | `endDateUtc != null` (with a real `endTimeUtc`, not just a date placeholder) |
+| Idle | no time entry at all (`GET .../timeentries/last` → 204/empty) |
 
 - `duration` is `0` while the timer is active – elapsed time must be computed locally.
-- Start time is split: `startDateUtc` (date, time part `00:00:00Z`) + `startTimeUtc` (e.g. `07:09:28.3515950`, 7 fractional digits). Combine them carefully; do not rely on `Date.parse` accepting 7 fractional digits.
-- Break object when open: `{ "startDate": "2026-09-28T07:13:35Z" }`
-- Break object when closed: `{ "startDate": "...", "duration": 27, "endDate": "2026-09-28T07:14:03Z" }` (duration in seconds)
-- Entry-level `breakDuration` was `null` with only an open break and `27` after one closed break. Assumed to be the sum of closed breaks – not verified with multiple breaks; prefer summing `breaks[].duration` yourself.
+- Start/end time are each split: `...DateUtc` (date only, time part `00:00:00Z`) +
+  `...TimeUtc` (e.g. `07:09:28.3515950`, 7 fractional digits — truncate before `Date.parse`).
+- Break object when open: `{ "startDate": "2026-09-28T07:13:35Z" }` (full ISO datetime, unlike
+  the split start/end fields above). Closed: adds `duration` (seconds) and `endDate`.
+- `typeOfWorkId`, `projectId`, `taskId`, `timezone` are top-level fields on the entry, required
+  to re-`start` tracking against the same work (used by Active Timer's "restart" and by Task
+  Timer's bind/start).
 - Useful display fields: `task.name`, `project.name`, `typeOfWork.name`.
 
 **Elapsed time:**
 - Running: `now − start − sum(closed break durations)`
 - Paused: `openBreak.startDate − start − sum(closed break durations)`
 
-**Not yet confirmed (verify before use):**
-- Rate limits.
-- Request bodies for pause/resume (see above).
-- Behaviour when the user has never tracked time (empty response / 404).
+**Control calls** (`/me/timetracking/{pause,resume,stop,start}`, verified live):
+- `pause`/`resume`/`stop` take **no request body at all** (not even an optional one) — sending
+  one (as the old PowerShell script did with `{}`) was the likely cause of that script's
+  "pause/resume don't work" symptom.
+- `start` requires a body: `{ timezone, typeOfWorkId, projectId?, taskId? }`.
+- All four return the **full updated time entry** — used directly to update the shared
+  poller's cache (`TimerPoller.applyEntry`) instead of re-polling.
 
-## Architecture (proposed)
+**Not yet fully confirmed:** rate limits.
+
+## Stream Deck quirks learned the hard way
+
+- **`setImage` needs a `data:` URI, not a bare `<svg>` string** — `data:image/svg+xml,<percent-encoded markup>`, per the SDK's "From SVG" example. A bare SVG string is silently accepted by the JS layer but never renders.
+- **Nested `<svg>` elements (with their own `viewBox`) are unreliable in the key-image pipeline** — it's a more limited renderer than a browser. Position/scale sub-content with a plain `transform="translate(...) scale(...)"` on a `<g>` instead.
+- **A key's native "Title" (set by the user directly in the Stream Deck app) always wins and can't be cleared by the plugin once set** — `KeyAction.setTitle()`'s doc note: "the title can only be set by the plugin when the user has not specified a custom title." The plugin only learns the *current* title via `onTitleParametersDidChange`, never on `willAppear` — a title set before the plugin last started won't be known until the user re-saves that field once. See `native-title-tracker.ts`; when a native title is present, both actions render background-only (`buildBackgroundSvg`) rather than draw overlapping text.
+- **`streamdeck validate` must be run from inside the `.sdPlugin` folder**, not the project root, or it errors about the manifest/name format.
+- **Any unhandled rejection in a key-press handler can silently crash the whole plugin process** — always `.catch()` (or try/catch) the async work kicked off from `onKeyDown`/`onKeyUp`, not just `#renderKey`.
+
+## Architecture (current)
 
 ```
 src/
-  plugin.ts                 # entry: logger level, register actions, connect
-  config/defaults.ts        # all default values, one place
-  i18n/strings.ts           # all user-facing strings (English), ready for localization
-  awork/client.ts           # HTTP only: auth, requests, errors, no business logic
-  awork/types.ts            # typed subset of the time entry response
-  timer/state.ts            # pure functions: derive state + elapsed seconds from a time entry
-  timer/poller.ts           # shared polling loop + cache, one per plugin (not per key)
-  render/key-renderer.ts    # builds title/SVG image for a key from state + settings
-  actions/active-timer.ts   # the key action: subscribes to poller, handles key down/up
+  plugin.ts                     # entry: logger level, register actions, connect, OAuth login handler
+  config/defaults.ts            # all default values + OAuth client constants, one place
+  i18n/strings.ts                # all user-facing strings (English), ready for localization
+  awork/client.ts                # HTTP only: OAuth bearer auth, /me/... requests, errors — no business logic
+  awork/oauth.ts                 # PKCE login flow (local callback server, browser launch) + token refresh
+  awork/pkce.ts                  # pure PKCE verifier/challenge functions (kept dependency-free so it's directly unit-testable)
+  awork/types.ts                 # typed subset of the time entry response
+  timer/state.ts                 # pure functions: derive state, elapsed seconds, press-decision helpers, task-match helper
+  timer/poller.ts                # shared polling loop + cache, one per plugin (not per key); applyEntry() for instant updates after control calls
+  render/key-renderer.ts         # builds the SVG (data URI) for a key: background/logo, wrapping label, wrapping/centered main text, background-only variant
+  actions/press-tracker.ts       # shared short-press/long-press timing, keyed by action instance id
+  actions/native-title-tracker.ts # tracks each key's native Stream Deck title (see quirks above)
+  actions/active-timer.ts        # Active Timer action
+  actions/task-timer.ts          # Task Timer action
 ```
 
-- `timer/state.ts` must be pure and unit-testable (no I/O, `now` passed in).
-- One shared poller for all visible keys; a local 1 s tick updates the display between polls.
-- Stop the poller when no key is visible.
+- `timer/state.ts` is pure and unit-tested (`timer/state.test.ts`, `awork/pkce.test.ts`) — no I/O, `now` passed in where relevant.
+- One shared poller (`timer/poller.ts`) for all visible keys of both actions; a local 1 s tick updates the display between polls; stops when no key is visible.
+- Tests run directly via Node's native TS execution (`npm run test` → `node --test src/timer/*.test.ts src/awork/*.test.ts`, no build step, no extra deps). **Gotcha:** a test can only import modules whose *relative* imports are type-only, or that have zero further relative imports — production code uses `.js`-suffixed specifiers (for the Bundler/Rollup build) which Node's native TS runner cannot resolve to the sibling `.ts` file. This is why `pkce.ts` was split out of `oauth.ts`: it has no project imports, so it's directly testable; `oauth.ts` itself isn't.
 
 ## Scaffold notes
 
-- `src/plugin.ts` currently sets `streamDeck.logger.setLevel("trace")`. Trace logs every message between Stream Deck and the plugin, including settings. **Lower this before the API key is introduced** (e.g. `info`), or make it configurable.
-- The example action `increment-counter` (TS, HTML, manifest entry, `imgs/actions/counter`) is scaffold only – replace it with the real action.
-- `.gitignore` already excludes `node_modules/`, `*.sdPlugin/bin`, `*.sdPlugin/logs`.
-- Logs: `dk.ellegaardid.awork-timer.sdPlugin/logs/`.
+- The original scaffold action `increment-counter` has been fully removed (replaced by Active Timer, then Task Timer added alongside it).
+- `streamDeck.logger.setLevel("info")` in `plugin.ts` — never `"trace"`, to avoid logging OAuth tokens.
+- `.gitignore` excludes `node_modules/`, `*.sdPlugin/bin`, `*.sdPlugin/logs`, and `/logs` (a stray top-level logs dir that `streamdeck` CLI commands create if run from the wrong cwd — see the validate quirk above).
+- Logs: `dk.ellegaardid.awork-timer.sdPlugin/logs/` (rotates; check the newest-modified file, not always `.0.log`).
+- Action icons are still placeholder art (copied from the scaffold's counter icons) — real branding is a separate follow-up task.
+- eID logo watermark asset: `dk.ellegaardid.awork-timer.sdPlugin/imgs/branding/eid-logo.svg` — a copy of the brand favicon with its hardcoded fill removed so `key-renderer.ts` can tint it white.
 
 ## Commands
 
 ```powershell
 npm run build     # rollup -c
 npm run watch     # rebuild + streamdeck restart dk.ellegaardid.awork-timer
+npm run test       # node --test src/timer/*.test.ts src/awork/*.test.ts
 streamdeck restart dk.ellegaardid.awork-timer
-streamdeck validate
+cd dk.ellegaardid.awork-timer.sdPlugin; streamdeck validate   # must run from inside the .sdPlugin folder
 streamdeck -v     # CLI version (not --version)
 ```
 
@@ -124,3 +184,5 @@ streamdeck -v     # CLI version (not --version)
 - Settings guide: https://docs.elgato.com/streamdeck/sdk/guides/settings
 - Property inspectors: https://docs.elgato.com/streamdeck/sdk/guides/ui
 - Localization: https://docs.elgato.com/streamdeck/sdk/guides/i18n
+- sdpi-components (property inspector library): https://sdpi-components.dev/docs
+- Awork API docs: https://developers.awork.com (also reachable via the Awork MCP connector's `find_capability`/`find_guidance` for exact route contracts)

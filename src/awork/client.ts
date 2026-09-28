@@ -1,18 +1,11 @@
 import streamDeck from "@elgato/streamdeck";
-import { AWORK_BASE_URL } from "../config/defaults.js";
+import { AWORK_BASE_URL, AWORK_OAUTH_REFRESH_SKEW_MS } from "../config/defaults.js";
+import { refreshTokens } from "./oauth.js";
 import type { GlobalSettings } from "../timer/types.js";
 import type { AworkTimeEntry } from "./types.js";
 
 export type AworkClientOptions = {
-	apiKey: string;
-	/**
-	 * The plugin owner's Awork user ID.
-	 *
-	 * An Awork API key authenticates as a separate, non-user-specific API user with admin-level
-	 * access — it is NOT the same identity as `/me`. Every user of this plugin must supply their
-	 * own Awork user ID as a setting; it cannot be derived from the API key.
-	 */
-	userId: string;
+	accessToken: string;
 	baseUrl?: string;
 };
 
@@ -26,15 +19,46 @@ export class AworkApiError extends Error {
 	}
 }
 
+export class AworkNotConnectedError extends Error {
+	constructor() {
+		super("Not connected to Awork yet — open this key's settings and click \"Connect to Awork\"");
+		this.name = "AworkNotConnectedError";
+	}
+}
+
+/** Builds an `AworkApiError` including Awork's own error body text, for real diagnosability. */
+async function toApiError(action: string, response: Response): Promise<AworkApiError> {
+	const bodyText = await response.text().catch(() => "");
+	return new AworkApiError(`Awork ${action} request failed with status ${response.status}: ${bodyText}`, response.status);
+}
+
+/**
+ * Talks to Awork as the owner themselves, via an OAuth access token — never a workspace API
+ * key. An API key authenticates as a separate, non-user-specific "API Client" identity; Awork's
+ * timer-control endpoints reject that identity with "you can only pause/resume/stop your own
+ * time trackings" for anyone but the caller itself, and `resume` is documented as `/me`-only
+ * regardless. Using the owner's own OAuth token makes every `/me/...` call genuinely be them.
+ */
 export class AworkClient {
-	readonly #apiKey: string;
-	readonly #userId: string;
+	readonly #accessToken: string;
 	readonly #baseUrl: string;
 
 	constructor(options: AworkClientOptions) {
-		this.#apiKey = options.apiKey;
-		this.#userId = options.userId;
+		this.#accessToken = options.accessToken;
 		this.#baseUrl = options.baseUrl ?? AWORK_BASE_URL;
+	}
+
+	/** Gets the connected owner's display name, e.g. to confirm a successful login. */
+	async getMe(): Promise<{ firstName: string | null; lastName: string | null }> {
+		const response = await fetch(`${this.#baseUrl}/me`, {
+			headers: { Authorization: `Bearer ${this.#accessToken}` }
+		});
+
+		if (!response.ok) {
+			throw await toApiError("me", response);
+		}
+
+		return (await response.json()) as { firstName: string | null; lastName: string | null };
 	}
 
 	/**
@@ -42,8 +66,8 @@ export class AworkClient {
 	 * @returns The entry, or `null` when the user has never tracked time.
 	 */
 	async getLastTimeEntry(): Promise<AworkTimeEntry | null> {
-		const response = await fetch(`${this.#baseUrl}/users/${this.#userId}/timeentries/last`, {
-			headers: { Authorization: `Bearer ${this.#apiKey}` }
+		const response = await fetch(`${this.#baseUrl}/me/timeentries/last`, {
+			headers: { Authorization: `Bearer ${this.#accessToken}` }
 		});
 
 		if (response.status === 404) {
@@ -51,7 +75,7 @@ export class AworkClient {
 		}
 
 		if (!response.ok) {
-			throw new AworkApiError(`Awork API request failed with status ${response.status}`, response.status);
+			throw await toApiError("timeentries/last", response);
 		}
 
 		const body: unknown = await response.json();
@@ -76,46 +100,49 @@ export class AworkClient {
 
 	/** Starts a new time entry, e.g. to "restart" a stopped one against the same work. */
 	async start(payload: { timezone: string; typeOfWorkId: string; projectId?: string | null; taskId?: string | null }): Promise<AworkTimeEntry> {
-		const response = await fetch(`${this.#baseUrl}/users/${this.#userId}/timetracking/start`, {
+		const response = await fetch(`${this.#baseUrl}/me/timetracking/start`, {
 			method: "POST",
-			headers: { Authorization: `Bearer ${this.#apiKey}`, "Content-Type": "application/json" },
+			headers: { Authorization: `Bearer ${this.#accessToken}`, "Content-Type": "application/json" },
 			body: JSON.stringify(payload)
 		});
 
 		if (!response.ok) {
-			throw new AworkApiError(`Awork start request failed with status ${response.status}`, response.status);
+			throw await toApiError("start", response);
 		}
 
 		return (await response.json()) as AworkTimeEntry;
 	}
 
-	/**
-	 * `pause`/`resume` take no request body at all per the Awork OpenAPI spec (not even an
-	 * optional one) — sending one (as the old PowerShell script did) is the likely cause of the
-	 * old "pause/resume don't work" behaviour, so none is sent here.
-	 */
 	async #control(action: "pause" | "resume" | "stop"): Promise<AworkTimeEntry> {
-		const response = await fetch(`${this.#baseUrl}/users/${this.#userId}/timetracking/${action}`, {
+		const response = await fetch(`${this.#baseUrl}/me/timetracking/${action}`, {
 			method: "POST",
-			headers: { Authorization: `Bearer ${this.#apiKey}` }
+			headers: { Authorization: `Bearer ${this.#accessToken}` }
 		});
 
 		if (!response.ok) {
-			throw new AworkApiError(`Awork ${action} request failed with status ${response.status}`, response.status);
+			throw await toApiError(action, response);
 		}
 
 		return (await response.json()) as AworkTimeEntry;
 	}
 
 	/**
-	 * Builds a client from the plugin's global settings.
-	 * @throws When the API key or user ID has not been configured yet.
+	 * Builds a client from the plugin's global settings, refreshing (and persisting) the access
+	 * token first when it's near expiry.
+	 * @throws {AworkNotConnectedError} When the owner hasn't connected their Awork account yet.
 	 */
 	static async fromGlobalSettings(): Promise<AworkClient> {
 		const settings = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
-		if (!settings.apiKey || !settings.userId) {
-			throw new Error("Awork API key or user ID is not configured yet");
+		if (!settings.oauth) {
+			throw new AworkNotConnectedError();
 		}
-		return new AworkClient({ apiKey: settings.apiKey, userId: settings.userId });
+
+		let { oauth } = settings;
+		if (Date.now() >= oauth.expiresAt - AWORK_OAUTH_REFRESH_SKEW_MS) {
+			oauth = await refreshTokens(oauth.refreshToken);
+			await streamDeck.settings.setGlobalSettings<GlobalSettings>({ ...settings, oauth });
+		}
+
+		return new AworkClient({ accessToken: oauth.accessToken });
 	}
 }
