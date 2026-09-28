@@ -1,5 +1,6 @@
 import streamDeck from "@elgato/streamdeck";
 import { AWORK_BASE_URL, AWORK_OAUTH_REFRESH_SKEW_MS } from "../config/defaults.js";
+import { STRINGS } from "../i18n/strings.js";
 import { refreshTokens } from "./oauth.js";
 import type { GlobalSettings } from "../timer/types.js";
 import type { AworkTimeEntry } from "./types.js";
@@ -23,6 +24,13 @@ export class AworkNotConnectedError extends Error {
 	constructor() {
 		super("Not connected to Awork yet — open this key's settings and click \"Connect to Awork\"");
 		this.name = "AworkNotConnectedError";
+	}
+}
+
+export class AworkMissingClientIdError extends Error {
+	constructor() {
+		super(STRINGS.propertyInspector.missingClientIdError);
+		this.name = "AworkMissingClientIdError";
 	}
 }
 
@@ -139,7 +147,10 @@ export class AworkClient {
 
 		let { oauth } = settings;
 		if (Date.now() >= oauth.expiresAt - AWORK_OAUTH_REFRESH_SKEW_MS) {
-			oauth = await refreshTokens(oauth.refreshToken);
+			if (!settings.oauthClientId) {
+				throw new AworkMissingClientIdError();
+			}
+			oauth = await refreshTokens(oauth.refreshToken, settings.oauthClientId);
 			await streamDeck.settings.setGlobalSettings<GlobalSettings>({ ...settings, oauth });
 		}
 

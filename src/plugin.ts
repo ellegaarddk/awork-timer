@@ -2,7 +2,7 @@ import streamDeck from "@elgato/streamdeck";
 
 import { ActiveTimer } from "./actions/active-timer";
 import { TaskTimer } from "./actions/task-timer";
-import { AworkClient } from "./awork/client";
+import { AworkClient, AworkMissingClientIdError } from "./awork/client";
 import { runLoginFlow } from "./awork/oauth";
 import type { GlobalSettings } from "./timer/types";
 
@@ -18,9 +18,13 @@ streamDeck.ui.onSendToPlugin<{ event?: string }>(async (ev) => {
 	}
 
 	try {
-		const oauth = await runLoginFlow();
-		streamDeck.logger.info("Awork login: tokens received, saving to global settings");
 		const settings = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
+		if (!settings.oauthClientId) {
+			throw new AworkMissingClientIdError();
+		}
+
+		const oauth = await runLoginFlow(settings.oauthClientId);
+		streamDeck.logger.info("Awork login: tokens received, saving to global settings");
 		await streamDeck.settings.setGlobalSettings<GlobalSettings>({ ...settings, oauth });
 
 		const me = await new AworkClient({ accessToken: oauth.accessToken }).getMe();

@@ -18,6 +18,8 @@ export type AworkOAuthTokens = {
 
 /** Global (plugin-wide) settings; never hardcode these values, never log the tokens. */
 export type GlobalSettings = {
+	/** The owner's awork OAuth API Client ID (Settings → Integrations → API Clients). Not secret, but not hardcoded either — each installation may register its own. */
+	oauthClientId?: string;
 	oauth?: AworkOAuthTokens;
 	pollIntervalSeconds?: number;
 };

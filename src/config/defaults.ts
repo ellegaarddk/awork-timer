@@ -5,11 +5,12 @@ import type { TimerState } from "../timer/types.js";
 export const AWORK_BASE_URL = "https://api.awork.com/api/v1";
 
 /**
- * OAuth 2.0 (PKCE) constants for the "Awork Timer (Stream Deck)" client application, created by
- * the owner under Settings → Integrations → API Clients in awork. The client ID is a public
- * identifier (not secret) — safe to commit, same as any native/CLI OAuth app.
+ * OAuth 2.0 (PKCE) constants for the awork API client application the owner creates under
+ * Settings → Integrations → API Clients in awork. The client ID itself is not a secret (public
+ * OAuth client IDs are routinely shipped in app source), but it's still a global *setting*
+ * (`oauthClientId`) rather than hardcoded here — each installation may register its own client
+ * application, and the redirect URI below must exactly match what's registered there.
  */
-export const AWORK_OAUTH_CLIENT_ID = "stream-deck-4628";
 export const AWORK_OAUTH_REDIRECT_PORT = 52305;
 export const AWORK_OAUTH_REDIRECT_URI = `http://127.0.0.1:${AWORK_OAUTH_REDIRECT_PORT}/callback`;
 export const AWORK_OAUTH_SCOPE = "full_access offline_access";

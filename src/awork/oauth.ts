@@ -1,14 +1,7 @@
 import { randomBytes } from "node:crypto";
 import http from "node:http";
 import open from "open";
-import {
-	AWORK_OAUTH_AUTHORIZE_URL,
-	AWORK_OAUTH_CLIENT_ID,
-	AWORK_OAUTH_REDIRECT_PORT,
-	AWORK_OAUTH_REDIRECT_URI,
-	AWORK_OAUTH_SCOPE,
-	AWORK_OAUTH_TOKEN_URL
-} from "../config/defaults.js";
+import { AWORK_OAUTH_AUTHORIZE_URL, AWORK_OAUTH_REDIRECT_PORT, AWORK_OAUTH_REDIRECT_URI, AWORK_OAUTH_SCOPE, AWORK_OAUTH_TOKEN_URL } from "../config/defaults.js";
 import { codeChallengeFromVerifier, generateCodeVerifier } from "./pkce.js";
 import type { AworkOAuthTokens } from "../timer/types.js";
 
@@ -43,9 +36,9 @@ async function exchangeToken(params: Record<string, string>): Promise<AworkOAuth
 	return toTokens((await response.json()) as TokenResponse);
 }
 
-export function refreshTokens(refreshToken: string): Promise<AworkOAuthTokens> {
+export function refreshTokens(refreshToken: string, clientId: string): Promise<AworkOAuthTokens> {
 	return exchangeToken({
-		client_id: AWORK_OAUTH_CLIENT_ID,
+		client_id: clientId,
 		grant_type: "refresh_token",
 		refresh_token: refreshToken
 	});
@@ -55,14 +48,14 @@ export function refreshTokens(refreshToken: string): Promise<AworkOAuthTokens> {
  * Runs the interactive PKCE login flow: opens the system browser to awork's consent screen,
  * catches the redirect on a one-shot local server, then exchanges the code for tokens.
  */
-export async function runLoginFlow(): Promise<AworkOAuthTokens> {
+export async function runLoginFlow(clientId: string): Promise<AworkOAuthTokens> {
 	const verifier = generateCodeVerifier();
 	const challenge = codeChallengeFromVerifier(verifier);
 	const state = randomBytes(16).toString("base64url");
 
 	const code = await waitForRedirectCode(state);
 	return exchangeToken({
-		client_id: AWORK_OAUTH_CLIENT_ID,
+		client_id: clientId,
 		grant_type: "authorization_code",
 		code,
 		redirect_uri: AWORK_OAUTH_REDIRECT_URI,
@@ -108,7 +101,7 @@ export async function runLoginFlow(): Promise<AworkOAuthTokens> {
 
 			server.listen(AWORK_OAUTH_REDIRECT_PORT, "127.0.0.1", () => {
 				const authorizeUrl = new URL(AWORK_OAUTH_AUTHORIZE_URL);
-				authorizeUrl.searchParams.set("client_id", AWORK_OAUTH_CLIENT_ID);
+				authorizeUrl.searchParams.set("client_id", clientId);
 				authorizeUrl.searchParams.set("redirect_uri", AWORK_OAUTH_REDIRECT_URI);
 				authorizeUrl.searchParams.set("scope", AWORK_OAUTH_SCOPE);
 				authorizeUrl.searchParams.set("response_type", "code");

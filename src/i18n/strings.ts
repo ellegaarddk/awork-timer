@@ -17,10 +17,14 @@ export const STRINGS = {
 		boundHelp: "Bound to: {task} ({project})"
 	},
 	propertyInspector: {
+		clientIdLabel: "Awork Client ID",
+		clientIdHelp:
+			"Create an API client in awork under Settings → Integrations → API Clients, with redirect URI http://127.0.0.1:52305/callback.",
 		connectLabel: "Awork Account",
 		connectButton: "Connect to Awork",
 		connectNotConnected: "Not connected yet.",
 		connectOpening: "Opening awork in your browser…",
+		missingClientIdError: "Missing awork client ID – enter it in the key's settings",
 		pollIntervalLabel: "Poll Interval (seconds)",
 		colorRunningLabel: "Running Color",
 		colorPausedLabel: "Paused Color",

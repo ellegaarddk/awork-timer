@@ -39,7 +39,8 @@ button bindable to one specific task via long-press, to start it on demand).
 ### Configurable settings (current)
 | Setting | Scope | Notes |
 |---|---|---|
-| Awork connection | global | OAuth 2.0 (PKCE); "Connect to Awork" button in either action's PI. No API key/user ID setting exists anymore. |
+| Awork Client ID | global | The OAuth API Client ID from awork's Settings → Integrations → API Clients. Not secret, but not hardcoded — checked before login/refresh, with a clear error if missing. |
+| Awork connection | global | OAuth 2.0 (PKCE); "Connect to Awork" button in Active Timer's PI. No API key/user ID setting exists anymore. |
 | Poll interval (s) | global | Default 20 s |
 | Color: running / paused / stopped / idle / error | per Active Timer key | Hex |
 | Time display format | per Active Timer key | `h:mm` or `h:mm:ss` |
@@ -73,9 +74,14 @@ them.** No `userId` setting exists or is needed.
 - OAuth client "Awork Timer (Stream Deck)" registered by the owner in awork under
   **Settings → Integrations → API Clients** (self-service; the earlier assumption that this
   needed a separate partner/approval process was wrong). Public client, no secret.
-  - Client ID `stream-deck-4628` — public, not secret, safe to commit (`config/defaults.ts`).
-  - Redirect URI `http://127.0.0.1:52305/callback`, fixed port, must match exactly what's
-    registered in awork.
+  - The **Client ID is a global setting** (`oauthClientId` in `GlobalSettings`), entered in
+    Active Timer's PI, not hardcoded — it isn't secret, but each installation may register its
+    own client application, so it doesn't belong in source. `AworkClient.fromGlobalSettings()`
+    and the "Connect to Awork" handler both check it's set *before* refreshing/starting the
+    login flow, throwing `AworkMissingClientIdError` (`awork/client.ts`) with a clear message
+    (`STRINGS.propertyInspector.missingClientIdError`) instead of letting awork fail generically.
+  - Redirect URI `http://127.0.0.1:52305/callback`, fixed port (`AWORK_OAUTH_REDIRECT_PORT` in
+    `config/defaults.ts`), must match exactly what's registered in awork.
 - Authorize: `GET https://api.awork.com/api/v1/accounts/authorize` — `client_id`,
   `redirect_uri`, `scope=full_access offline_access`, `response_type=code`,
   `grant_type=authorization_code` (yes, on the *authorize* call too, per Awork's own docs),

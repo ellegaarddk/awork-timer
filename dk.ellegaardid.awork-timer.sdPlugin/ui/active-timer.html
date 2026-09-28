@@ -13,6 +13,13 @@
         "global" fields below persist to the plugin's global settings and are shared by every key.
     -->
 
+    <sdpi-item label="Awork Client ID">
+        <sdpi-textfield setting="oauthClientId" global placeholder="e.g. stream-deck-4628"></sdpi-textfield>
+    </sdpi-item>
+    <sdpi-item>
+        <small>Create an API client in awork under Settings &rarr; Integrations &rarr; API Clients, with redirect URI http://127.0.0.1:52305/callback.</small>
+    </sdpi-item>
+
     <sdpi-item label="Awork Account">
         <sdpi-button id="connect-button" onclick="connectToAwork()">Connect to Awork</sdpi-button>
     </sdpi-item>
