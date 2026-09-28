@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+
+<head lang="en">
+    <title>Active Timer Settings</title>
+    <meta charset="utf-8" />
+    <script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+</head>
+
+<body>
+    <!--
+        Learn more about property inspector components at https://sdpi-components.dev/docs/components
+        "global" fields below persist to the plugin's global settings and are shared by every key.
+    -->
+
+    <sdpi-item label="Awork API Key">
+        <sdpi-password setting="apiKey" global placeholder="Settings &rarr; Integrations &rarr; Manage API Keys in awork"></sdpi-password>
+    </sdpi-item>
+
+    <sdpi-item label="Awork User ID">
+        <sdpi-textfield setting="userId" global placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6"></sdpi-textfield>
+    </sdpi-item>
+    <sdpi-item>
+        <small>Find this by opening your own profile in awork &mdash; the ID is the UUID in the page's URL (&hellip;/users/&lt;id&gt;). An API key authenticates as a separate API user, so this cannot be detected automatically &mdash; every user of this plugin enters their own.</small>
+    </sdpi-item>
+
+    <sdpi-item label="Poll Interval (s)">
+        <sdpi-range setting="pollIntervalSeconds" global min="10" max="120" step="5" default="20" showlabels></sdpi-range>
+    </sdpi-item>
+
+    <sdpi-item label="Time Format">
+        <sdpi-select setting="timeFormat" default="h:mm:ss">
+            <option value="h:mm:ss">h:mm:ss</option>
+            <option value="h:mm">h:mm</option>
+        </sdpi-select>
+    </sdpi-item>
+
+    <sdpi-item label="Running Color">
+        <sdpi-color setting="colorRunning" default="#14532d"></sdpi-color>
+    </sdpi-item>
+
+    <sdpi-item label="Paused Color">
+        <sdpi-color setting="colorPaused" default="#78350f"></sdpi-color>
+    </sdpi-item>
+
+    <sdpi-item label="Stopped Color">
+        <sdpi-color setting="colorStopped" default="#1f2937"></sdpi-color>
+    </sdpi-item>
+
+    <sdpi-item label="Idle Color">
+        <sdpi-color setting="colorIdle" default="#0f172a"></sdpi-color>
+    </sdpi-item>
+
+    <sdpi-item label="Error Color">
+        <sdpi-color setting="colorError" default="#7f1d1d"></sdpi-color>
+    </sdpi-item>
+
+    <sdpi-item label="Short Press">
+        <sdpi-select setting="shortPressAction" default="pause-resume">
+            <option value="pause-resume">Pause / Resume</option>
+            <option value="stop">Stop</option>
+            <option value="none">None</option>
+        </sdpi-select>
+    </sdpi-item>
+
+    <sdpi-item label="Long Press">
+        <sdpi-select setting="longPressAction" default="stop">
+            <option value="pause-resume">Pause / Resume</option>
+            <option value="stop">Stop</option>
+            <option value="none">None</option>
+        </sdpi-select>
+    </sdpi-item>
+
+    <sdpi-item label="Long Press Threshold (ms)">
+        <sdpi-range setting="longPressThresholdMs" min="200" max="2000" step="50" default="600" showlabels></sdpi-range>
+    </sdpi-item>
+
+</body>
+
+</html>

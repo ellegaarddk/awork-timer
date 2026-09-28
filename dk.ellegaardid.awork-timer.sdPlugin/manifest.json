@@ -1,0 +1,47 @@
+{
+	"Name": "Awork Timer",
+	"Version": "0.1.0.0",
+	"Author": "ellegaard ID",
+	"Actions": [
+		{
+			"Name": "Active Timer",
+			"UUID": "dk.ellegaardid.awork-timer.active-timer",
+			"Icon": "imgs/actions/active-timer/icon",
+			"Tooltip": "Shows the elapsed time of your active Awork timer and its state.",
+			"PropertyInspectorPath": "ui/active-timer.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/active-timer/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		}
+	],
+	"Category": "Awork Timer",
+	"CategoryIcon": "imgs/plugin/category-icon",
+	"CodePath": "bin/plugin.js",
+	"Description": "Shows and controls Awork timers",
+	"Icon": "imgs/plugin/marketplace",
+	"SDKVersion": 3,
+	"Software": {
+		"MinimumVersion": "7.1"
+	},
+	"OS": [
+		{
+			"Platform": "mac",
+			"MinimumVersion": "12"
+		},
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		}
+	],
+	"Nodejs": {
+		"Version": "24",
+		"Debug": "enabled"
+	},
+	"UUID": "dk.ellegaardid.awork-timer"
+}
